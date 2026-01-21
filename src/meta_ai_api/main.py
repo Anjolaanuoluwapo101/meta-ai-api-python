@@ -15,8 +15,7 @@ from meta_ai_api.utils import (
 )
 
 from meta_ai_api.utils import get_fb_session, get_session
-from meta_ai_api.rate_limiter import rate_limited, get_rate_limiter
-from meta_ai_api.header_rotator import get_header_rotator
+from meta_ai_api.header_rotator import HeaderRotator
 
 from meta_ai_api.exceptions import FacebookRegionBlocked
 
@@ -33,11 +32,8 @@ class MetaAI:
         self, fb_email: str = None, fb_password: str = None, proxy: dict = None
     ):
         self.session = get_session()
-        self.header_rotator = get_header_rotator()
-        
-        # Set initial dynamic headers instead of static ones
+        self.header_rotator = HeaderRotator()
         self.session.headers.update(self.header_rotator.get_headers())
-        
         self.access_token = None
         self.fb_email = fb_email
         self.fb_password = fb_password
@@ -48,21 +44,6 @@ class MetaAI:
         self.external_conversation_id = None
         self.offline_threading_id = None
 
-        self.rate_limiter = get_rate_limiter()
-
-    def _get_dynamic_headers(self, base_headers: Dict[str, str] = None) -> Dict[str, str]:
-        """
-        Get fresh dynamic headers for each request.`
-        
-        Args:
-            base_headers (Dict): Optional base headers to merge
-            
-        Returns:
-            Dict: Dynamic headers
-        """
-        return self.header_rotator.get_headers(base_headers)
-
-    @rate_limited
     def get_access_token(self) -> str:
         """
         Retrieves an access token using Meta's authentication API.
@@ -87,15 +68,14 @@ class MetaAI:
             "doc_id": "7604648749596940",
         }
         payload = urllib.parse.urlencode(payload)  # noqa
-        
-        # Use dynamic headers instead of static ones
-        headers = self._get_dynamic_headers({
+        headers = {
+            **self.header_rotator.get_headers(),
             "content-type": "application/x-www-form-urlencoded",
             "cookie": f'_js_datr={self.cookies["_js_datr"]}; '
             f'abra_csrf={self.cookies["abra_csrf"]}; datr={self.cookies["datr"]};',
             "sec-fetch-site": "same-origin",
             "x-fb-friendly-name": "useAbraAcceptTOSForTempUserMutation",
-        })
+        }
 
         response = self.session.post(url, headers=headers, data=payload)
 
@@ -115,7 +95,6 @@ class MetaAI:
 
         return access_token
 
-    @rate_limited
     def prompt(
         self,
         message: str,
@@ -150,7 +129,6 @@ class MetaAI:
         if not self.external_conversation_id or new_conversation:
             external_id = str(uuid.uuid4())
             self.external_conversation_id = external_id
-        
         payload = {
             **auth_payload,
             "fb_api_caller_class": "RelayModern",
@@ -174,20 +152,16 @@ class MetaAI:
             "doc_id": "7783822248314888",
         }
         payload = urllib.parse.urlencode(payload)  # noqa
-        
-        # Use dynamic headers for each request
-        headers = self._get_dynamic_headers({
+        headers = {
+            **self.header_rotator.get_headers(),
             "content-type": "application/x-www-form-urlencoded",
             "x-fb-friendly-name": "useAbraSendMessageMutation",
-        })
-        
+        }
         if self.is_authed:
             headers["cookie"] = f'abra_sess={self.cookies["abra_sess"]}'
-            # Recreate the session to avoid cookie leakage when user is authenticated
             self.session = requests.Session()
             self.session.proxies = self.proxy
-            # Update session headers with dynamic ones
-            self.session.headers.update(headers)
+            self.session.headers.update(self.header_rotator.get_headers())
 
         response = self.session.post(url, headers=headers, data=payload, stream=stream)
         if not stream:
@@ -331,12 +305,10 @@ class MetaAI:
             dict: A dictionary containing essential cookies.
         """
         session = HTMLSession()
-        headers = self._get_dynamic_headers()
-        
+        headers = {}
         if self.fb_email is not None and self.fb_password is not None:
             fb_session = get_fb_session(self.fb_email, self.fb_password)
-            headers["cookie"] = f"abra_sess={fb_session['abra_sess']}"
-        
+            headers = {"cookie": f"abra_sess={fb_session['abra_sess']}"}
         response = session.get(
             "https://www.meta.ai/",
             headers=headers,
@@ -387,13 +359,14 @@ class MetaAI:
 
         payload = urllib.parse.urlencode(payload)  # noqa
 
-        headers = self._get_dynamic_headers({
+        headers = {
+            **self.header_rotator.get_headers(),
             "authority": "graph.meta.ai",
             "accept-language": "en-US,en;q=0.9,fr-FR;q=0.8,fr;q=0.7",
             "content-type": "application/x-www-form-urlencoded",
             "cookie": f'dpr=2; abra_csrf={self.cookies.get("abra_csrf")}; datr={self.cookies.get("datr")}; ps_n=1; ps_l=1',
             "x-fb-friendly-name": "AbraSearchPluginDialogQuery",
-        })
+        }
 
         response = self.session.post(url, headers=headers, data=payload)
         response_json = response.json()
