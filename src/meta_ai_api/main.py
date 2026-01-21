@@ -75,6 +75,8 @@ class MetaAI:
             f'abra_csrf={self.cookies["abra_csrf"]}; datr={self.cookies["datr"]};',
             "sec-fetch-site": "same-origin",
             "x-fb-friendly-name": "useAbraAcceptTOSForTempUserMutation",
+            "referer": "https://www.meta.ai/",
+            "origin": "https://www.meta.ai",
         }
 
         response = self.session.post(url, headers=headers, data=payload)
@@ -156,6 +158,8 @@ class MetaAI:
             **self.header_rotator.get_headers(),
             "content-type": "application/x-www-form-urlencoded",
             "x-fb-friendly-name": "useAbraSendMessageMutation",
+            "referer": "https://www.meta.ai/",
+            "origin": "https://www.meta.ai",
         }
         if self.is_authed:
             headers["cookie"] = f'abra_sess={self.cookies["abra_sess"]}'
@@ -366,6 +370,8 @@ class MetaAI:
             "content-type": "application/x-www-form-urlencoded",
             "cookie": f'dpr=2; abra_csrf={self.cookies.get("abra_csrf")}; datr={self.cookies.get("datr")}; ps_n=1; ps_l=1',
             "x-fb-friendly-name": "AbraSearchPluginDialogQuery",
+            "referer": "https://www.meta.ai/",
+            "origin": "https://www.meta.ai",
         }
 
         response = self.session.post(url, headers=headers, data=payload)
